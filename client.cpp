@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <curses.h>
 #include <regex.h>
+#include <sys/select.h>
+#include <iostream>
 /* You will to add includes here */
 
 #define DEBUG
@@ -32,18 +34,41 @@ int main(int argc, char *argv[])
   char *Desthost = strtok(argv[1], delim);
   char *Destport = strtok(NULL, delim);
   char *DestName = strtok(argv[2], delim);
+  char expression[] = "^[A-Za-z0-9_]+$";
+  regex_t regularexpression;
+  int reti;
+
+  reti = regcomp(&regularexpression, expression, REG_EXTENDED);
+  if (reti)
+  {
+    fprintf(stderr, "Could not compile regex.\n");
+    exit(1);
+  }
+
+  int matches = 0;
+  regmatch_t items;
 
   if (Desthost == NULL || Destport == NULL || DestName == NULL)
   {
     printf("Wrong format.\n");
     exit(0);
   }
-  if(strlen(DestName) > 12)
+  if (strlen(DestName) > 12)
   {
     printf("Error, name to long!\n");
     exit(1);
   }
-  printf("%s\n", DestName);
+
+  reti = regexec(&regularexpression, argv[2], matches, &items, 0);
+  if (reti)
+  {
+    //Mellanslaget är fel i clients send, lös detta.
+    //printf("Nick %s is accepted.\n",argv[i]);
+    printf("Nick is not accepted.\n");
+    exit(0);
+  }
+
+  //regfree(&regularexpression);
   int port = atoi(Destport);
 
   addrinfo sa, *si, *p;
@@ -89,20 +114,66 @@ int main(int argc, char *argv[])
   freeaddrinfo(si);
 
   char recvBuf[256];
-  char sendBuf[256];
+  char sendBuf[260];
   int bytes;
+  fd_set currentSockets;
+  fd_set readySockets;
+  FD_ZERO(&currentSockets);
+  FD_ZERO(&readySockets);
+  FD_SET(sockfd, &currentSockets);
+  FD_SET(STDIN_FILENO, &currentSockets);
+  int fdMax = sockfd;
+  int nfds = 0;
+  char messageBuf[256];
 
   while (1)
   {
-    if ((bytes = recv(sockfd, recvBuf, sizeof(recvBuf), 0)) == -1)
+    readySockets = currentSockets;
+    if (fdMax < sockfd)
     {
-      continue;
+      fdMax = sockfd;
     }
-    else if(strstr(recvBuf, VERSION) != nullptr)
+    nfds = select(fdMax + 1, &readySockets, NULL, NULL, NULL);
+    if (nfds == -1)
     {
-      printf("Server protocol: %s\n", recvBuf);
-      sprintf(sendBuf, "NICK%s",DestName);
-      send(sockfd, sendBuf, strlen(sendBuf), 0);
+      printf("ERROR, something went wrong!\n");
+      break;
+    }
+    if (FD_ISSET(STDIN_FILENO, &readySockets))
+    {
+      memset(sendBuf, 0, sizeof(sendBuf));
+      memset(messageBuf, 0, sizeof(messageBuf));
+      std::cin.getline(messageBuf, sizeof(messageBuf));
+      sprintf(sendBuf, "MSG %s", messageBuf);
+      send(sockfd, sendBuf, sizeof(sendBuf), 0);
+      FD_CLR(STDIN_FILENO, &readySockets);
+    }
+    if (FD_ISSET(sockfd, &readySockets))
+    {
+      memset(recvBuf, 0, sizeof(recvBuf));
+      if ((bytes = recv(sockfd, recvBuf, sizeof(recvBuf), 0)) == -1)
+      {
+        continue;
+      }
+      else if (strstr(recvBuf, VERSION) != nullptr)
+      {
+        printf("Server protocol: %s\n", recvBuf);
+        sprintf(sendBuf, "NICK %s", DestName);
+        send(sockfd, sendBuf, strlen(sendBuf), 0);
+      }
+      else if (strstr(recvBuf, "OK") != nullptr)
+      {
+        printf("Name accepted!\n");
+      }
+      else if (strstr(recvBuf, "ERR") != nullptr)
+      {
+        printf("Name is not accepted!\n");
+      }
+      else
+      {
+        printf("%s\n", recvBuf);
+      }
+      FD_CLR(sockfd, &readySockets);
     }
   }
 

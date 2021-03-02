@@ -10,7 +10,7 @@
 #include <netdb.h>
 #include <signal.h>
 #include <curses.h>
-#include <regex.h>
+#include <sys/select.h>
 /* You will to add includes here */
 
 #define DEBUG
@@ -46,11 +46,6 @@ int main(int argc, char *argv[])
   memset(&sa, 0, sizeof(sa));
   sa.ai_family = AF_UNSPEC;
   sa.ai_socktype = SOCK_STREAM;
-  char expression[] = "^[A-Za-z_]+$";
-  regex_t regularexpression;
-  int reti;
-  int matches = 0;
-  regmatch_t items;
 
   struct timeval tv;
   tv.tv_sec = 5;
@@ -86,13 +81,6 @@ int main(int argc, char *argv[])
     exit(0);
   }
 
-  reti = regcomp(&regularexpression, expression, REG_EXTENDED);
-  if (reti)
-  {
-    fprintf(stderr, "Could not compile regex.\n");
-    exit(1);
-  }
-
   freeaddrinfo(si);
 
   if (listen(sockfd, 5) == -1)
@@ -104,9 +92,22 @@ int main(int argc, char *argv[])
   len = sizeof(cli);
   char buffer[128];
   char recvBuffer[256];
+  fd_set currentSockets;
+  fd_set readySockets;
+  FD_ZERO(&currentSockets);
+  FD_ZERO(&readySockets);
+  FD_SET(sockfd, &currentSockets);
+  int fdMax = sockfd;
+  int nfds = 0;
 
   while (true)
   {
+    readySockets = currentSockets;
+    if (fdMax < sockfd)
+    {
+      fdMax = sockfd;
+    }
+    nfds = select(fdMax + 1, &readySockets, NULL, NULL, NULL);
     if ((connfd = accept(sockfd, (struct sockaddr *)&cli, (socklen_t *)&len)) == -1)
     {
       printf("Couldnt accept anything, trying again!\n");
@@ -128,22 +129,9 @@ int main(int argc, char *argv[])
     }
     else if (strstr(recvBuffer, "NICK") != nullptr)
     {
-      reti = regexec(&regularexpression, recvBuffer, matches, &items, 0);
-      if (!reti)
-      {
-        //Mellanslaget är fel i clients send, lös detta.
-        //printf("Nick %s is accepted.\n",argv[i]);
-        printf("Nick is accepted.\n");
-      }
-      else
-      {
-        //Mellanslaget är fel i clients send, lös detta.
-        //	printf("%s is not accepted.\n",argv[i]);
-        printf("Nick is not accepted.\n");
-      }
+      printf("Name is allowed!\n");
     }
   }
-  regfree(&regularexpression);
 
 #ifdef DEBUG
   printf("Host %s, and port %d.\n", Desthost, port);
