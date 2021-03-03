@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
   freeaddrinfo(si);
 
-  char recvBuf[256];
+  char recvBuf[273];
   char sendBuf[260];
   int bytes;
   fd_set currentSockets;
@@ -125,6 +125,9 @@ int main(int argc, char *argv[])
   int fdMax = sockfd;
   int nfds = 0;
   char messageBuf[256];
+  char command[8];
+  char buffer[256];
+  char nameBuffer[12];
 
   while (1)
   {
@@ -144,9 +147,21 @@ int main(int argc, char *argv[])
       memset(sendBuf, 0, sizeof(sendBuf));
       memset(messageBuf, 0, sizeof(messageBuf));
       std::cin.getline(messageBuf, sizeof(messageBuf));
-      sprintf(sendBuf, "MSG %s", messageBuf);
-      send(sockfd, sendBuf, sizeof(sendBuf), 0);
-      FD_CLR(STDIN_FILENO, &readySockets);
+      std::cin.clear();
+      if (strlen(messageBuf) > 256)
+      {
+        printf("TO BIG MESSAGE\n");
+        FD_CLR(STDIN_FILENO, &readySockets);
+        memset(messageBuf, 0, sizeof(messageBuf));
+        break;
+      }
+      else
+      {
+        //sscanf(recvBuf, "%s %s", command, buffer);
+        sprintf(sendBuf, "MSG %s", messageBuf);
+        send(sockfd, sendBuf, sizeof(sendBuf), 0);
+        FD_CLR(STDIN_FILENO, &readySockets);
+      }
     }
     if (FD_ISSET(sockfd, &readySockets))
     {
@@ -155,8 +170,22 @@ int main(int argc, char *argv[])
       {
         continue;
       }
+      else
+      {
+        memset(command, 0, sizeof(command));
+        sscanf(recvBuf, "%s", command);
+      }
+      if (strstr(command, "MSG"))
+      {
+        memset(buffer, 0, sizeof(buffer));
+        memset(command, 0, sizeof(command));
+        memset(nameBuffer, 0, sizeof(nameBuffer));
+        sscanf(recvBuf, "%s %s %[^\n]", command, nameBuffer, buffer);
+        printf("%s: %s\n", nameBuffer, buffer);
+      }
       else if (strstr(recvBuf, VERSION) != nullptr)
       {
+        memset(sendBuf, 0, sizeof(sendBuf));
         printf("Server protocol: %s\n", recvBuf);
         sprintf(sendBuf, "NICK %s", DestName);
         send(sockfd, sendBuf, strlen(sendBuf), 0);
@@ -168,10 +197,6 @@ int main(int argc, char *argv[])
       else if (strstr(recvBuf, "ERR") != nullptr)
       {
         printf("Name is not accepted!\n");
-      }
-      else
-      {
-        printf("%s\n", recvBuf);
       }
       FD_CLR(sockfd, &readySockets);
     }
