@@ -13,11 +13,17 @@
 #include <regex.h>
 #include <sys/select.h>
 #include <iostream>
+#include <signal.h>
 /* You will to add includes here */
 
 #define DEBUG
 #define VERSION "HELLO 1\n"
 #define ERROR "ERROR TO\n"
+
+void INThandler(int sig)
+{
+  exit(0);
+}
 
 int main(int argc, char *argv[])
 {
@@ -112,6 +118,7 @@ int main(int argc, char *argv[])
   }
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
   freeaddrinfo(si);
+  signal(SIGINT, INThandler);
 
   char recvBuf[273];
   char sendBuf[260];

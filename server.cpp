@@ -55,6 +55,7 @@ int main(int argc, char *argv[])
   memset(&sa, 0, sizeof(sa));
   sa.ai_family = AF_UNSPEC;
   sa.ai_socktype = SOCK_STREAM;
+  sa.ai_flags = AI_PASSIVE;
 
   struct timeval tv;
   tv.tv_sec = 5;
@@ -110,6 +111,7 @@ int main(int argc, char *argv[])
   FD_SET(sockfd, &currentSockets);
   int fdMax = sockfd;
   int nfds = 0;
+  int recieve = 0;
 
   while (true)
   {
@@ -119,6 +121,7 @@ int main(int argc, char *argv[])
       if (fdMax < clients.at(i).sockID)
       {
         fdMax = clients.at(i).sockID;
+        printf("ooga\n");
       }
     }
     if (fdMax < sockfd)
@@ -154,12 +157,23 @@ int main(int argc, char *argv[])
 
     for (size_t i = 0; i < clients.size(); i++)
     {
+
       if (FD_ISSET(clients.at(i).sockID, &readySockets))
       {
         memset(recvBuffer, 0, sizeof(recvBuffer));
-        if (recv(clients.at(i).sockID, recvBuffer, sizeof(recvBuffer), 0) == -1)
+        if ((recieve = recv(clients.at(i).sockID, recvBuffer, sizeof(recvBuffer), 0)) <= 0)
         {
-          continue;
+          if (recieve == 0)
+          {
+            close(clients.at(i).sockID);
+            FD_CLR(clients.at(i).sockID, &readySockets);
+            clients.erase(clients.begin() + i);     
+          }
+          else if (recieve == -1)
+          {
+            FD_CLR(clients.at(i).sockID, &readySockets);
+            continue;
+          }
         }
         else if (strstr(recvBuffer, "MSG ") != nullptr)
         {
