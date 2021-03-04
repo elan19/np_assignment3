@@ -156,14 +156,13 @@ int main(int argc, char *argv[])
       std::cin.clear();
       if (strlen(messageBuf) > 256)
       {
-        printf("TO BIG MESSAGE\n");
+        printf("Message to long!\n");
         FD_CLR(STDIN_FILENO, &readySockets);
         memset(messageBuf, 0, sizeof(messageBuf));
         break;
       }
       else
       {
-        //sscanf(recvBuf, "%s %s", command, buffer);
         sprintf(sendBuf, "MSG %s", messageBuf);
         send(sockfd, sendBuf, sizeof(sendBuf), 0);
         FD_CLR(STDIN_FILENO, &readySockets);
