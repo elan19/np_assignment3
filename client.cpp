@@ -19,7 +19,6 @@
 #define DEBUG
 #define VERSION "HELLO 1\n"
 #define ERROR "ERROR TO\n"
-#define SERVERQUIT "Server is closing!\n"
 
 void INThandler(int sig)
 {
@@ -34,7 +33,7 @@ int main(int argc, char *argv[])
 
   if (argc != 3)
   {
-    printf("Wrong format IP:PORT:NAME\n");
+    printf("Wrong format IP:PORT NAME\n");
     exit(0);
   }
 
@@ -187,8 +186,8 @@ int main(int argc, char *argv[])
         memset(buffer, 0, sizeof(buffer));
         memset(command, 0, sizeof(command));
         memset(nameBuffer, 0, sizeof(nameBuffer));
-        sscanf(recvBuf, "%s %s %[^\n]", command, nameBuffer, buffer);
-        if (strstr(nameBuffer, DestName) == nullptr)
+        sscanf(recvBuf, "%s%s%[^\n]", command, nameBuffer, buffer);
+        if (strcmp(nameBuffer, DestName) != 0)
         {
           printf("%s: %s\n", nameBuffer, buffer);
         }
@@ -207,6 +206,7 @@ int main(int argc, char *argv[])
       else if (strstr(recvBuf, "ERR") != nullptr)
       {
         printf("Name is not accepted!\n");
+        exit(0);
       }
       else if(strstr(recvBuf, "Server is closing!\n") != nullptr)
       {

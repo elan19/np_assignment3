@@ -24,7 +24,7 @@ std::vector<client> clients;
 
 void INThandler(int sig)
 {
-  for(size_t i; i < clients.size(); i++)
+  for (size_t i; i < clients.size(); i++)
   {
     send(clients[i].sockID, "Server is closing!\n", strlen("Server is closing!\n"), 0);
   }
@@ -207,10 +207,27 @@ int main(int argc, char *argv[])
                 if (i == clients[j].sockID)
                 {
                   sscanf(recvBuffer, "%s %s", command, clients.at(j).name);
-                  printf("Name is allowed!\n");
-                  break;
+                  bool nameExists = false;
+                  for (size_t g = 0; g < clients.size() && !nameExists; g++)
+                  {
+                    if (g != j && strcmp(clients[g].name, clients[j].name) == 0 && strlen(clients[g].name) == strlen(clients[j].name))
+                    {
+                      nameExists = true;
+                      send(i, "ERR The name is already in use!\n", strlen("ERR The name is already in use!\n"), 0);
+                    }
+                  }
+                  if (nameExists == false)
+                  {
+                    printf("Name is allowed!\n");
+                    send(i, "OK\n", strlen("OK\n"), 0);
+                    break;
+                  }
                 }
               }
+            }
+            else
+            {
+              send(i, "ERROR Wrong format on the message\n", strlen("ERORR Wrong format on the message\n"), 0);
             }
           }
         }
