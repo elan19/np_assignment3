@@ -19,9 +19,11 @@
 #define DEBUG
 #define VERSION "HELLO 1\n"
 #define ERROR "ERROR TO\n"
+#define SERVERQUIT "Server is closing!\n"
 
 void INThandler(int sig)
 {
+  printf("\n");
   exit(0);
 }
 
@@ -68,13 +70,11 @@ int main(int argc, char *argv[])
   reti = regexec(&regularexpression, argv[2], matches, &items, 0);
   if (reti)
   {
-    //Mellanslaget är fel i clients send, lös detta.
-    //printf("Nick %s is accepted.\n",argv[i]);
     printf("Nick is not accepted.\n");
     exit(0);
   }
 
-  //regfree(&regularexpression);
+  regfree(&regularexpression);
   int port = atoi(Destport);
 
   addrinfo sa, *si, *p;
@@ -188,7 +188,10 @@ int main(int argc, char *argv[])
         memset(command, 0, sizeof(command));
         memset(nameBuffer, 0, sizeof(nameBuffer));
         sscanf(recvBuf, "%s %s %[^\n]", command, nameBuffer, buffer);
-        printf("%s: %s\n", nameBuffer, buffer);
+        if (strstr(nameBuffer, DestName) == nullptr)
+        {
+          printf("%s: %s\n", nameBuffer, buffer);
+        }
       }
       else if (strstr(recvBuf, VERSION) != nullptr)
       {
@@ -204,6 +207,11 @@ int main(int argc, char *argv[])
       else if (strstr(recvBuf, "ERR") != nullptr)
       {
         printf("Name is not accepted!\n");
+      }
+      else if(strstr(recvBuf, "Server is closing!\n") != nullptr)
+      {
+        printf("%s", recvBuf);
+        exit(0);
       }
       FD_CLR(sockfd, &readySockets);
     }

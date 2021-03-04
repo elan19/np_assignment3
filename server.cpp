@@ -22,6 +22,15 @@ struct client
 };
 std::vector<client> clients;
 
+void INThandler(int sig)
+{
+  for(size_t i; i < clients.size(); i++)
+  {
+    send(clients[i].sockID, "Server is closing!\n", strlen("Server is closing!\n"), 0);
+  }
+  exit(0);
+}
+
 #define DEBUG
 #define VERSION "HELLO 1\n"
 #define ERROR "ERROR TO\n"
@@ -92,8 +101,9 @@ int main(int argc, char *argv[])
   }
 
   freeaddrinfo(si);
+  signal(SIGINT, INThandler);
 
-  if (listen(sockfd, 5) == -1)
+  if (listen(sockfd, 1) == -1)
   {
     printf("Error: Listen failed!\n");
     exit(0);
@@ -116,18 +126,7 @@ int main(int argc, char *argv[])
   while (true)
   {
     readySockets = currentSockets;
-    for (size_t i = 0; i < clients.size(); i++)
-    {
-      if (fdMax < clients.at(i).sockID)
-      {
-        fdMax = clients.at(i).sockID;
-        printf("ooga\n");
-      }
-    }
-    if (fdMax < sockfd)
-    {
-      fdMax = sockfd;
-    }
+
     nfds = select(fdMax + 1, &readySockets, NULL, NULL, NULL);
     if (nfds == -1)
     {
@@ -135,67 +134,87 @@ int main(int argc, char *argv[])
       break;
     }
 
-    if (FD_ISSET(sockfd, &readySockets))
-    {
-      if ((connfd = accept(sockfd, (struct sockaddr *)&cli, (socklen_t *)&len)) == -1)
-      {
-        continue;
-      }
-      else
-      {
-        struct client newClient;
-        newClient.sockID = connfd;
-        newClient.addr = cli;
-        FD_SET(newClient.sockID, &currentSockets);
-        clients.push_back(newClient);
-        char buf[sizeof(VERSION)] = VERSION;
-        send(connfd, buf, strlen(buf), 0);
-        printf("Server protocol: %s\n", buf);
-      }
-      FD_CLR(sockfd, &readySockets);
-    }
-
-    for (size_t i = 0; i < clients.size(); i++)
+    for (int i = sockfd; i < fdMax + 1; i++)
     {
 
-      if (FD_ISSET(clients.at(i).sockID, &readySockets))
+      if (FD_ISSET(i, &readySockets))
       {
-        memset(recvBuffer, 0, sizeof(recvBuffer));
-        if ((recieve = recv(clients.at(i).sockID, recvBuffer, sizeof(recvBuffer), 0)) <= 0)
+        if (i == sockfd)
         {
-          if (recieve == 0)
+          if ((connfd = accept(sockfd, (struct sockaddr *)&cli, (socklen_t *)&len)) == -1)
           {
-            close(clients.at(i).sockID);
-            FD_CLR(clients.at(i).sockID, &readySockets);
-            clients.erase(clients.begin() + i);     
-          }
-          else if (recieve == -1)
-          {
-            FD_CLR(clients.at(i).sockID, &readySockets);
             continue;
           }
-        }
-        else if (strstr(recvBuffer, "MSG ") != nullptr)
-        {
-          memset(buffer, 0, sizeof(buffer));
-          memset(command, 0, sizeof(command));
-          memset(messageBuffer, 0, sizeof(messageBuffer));
-          sscanf(recvBuffer, "%s %[^\n]", command, messageBuffer);
-          sprintf(buffer, "%s %s %s", command, clients.at(i).name, messageBuffer);
-          for (size_t j = 0; j < clients.size(); j++)
+          else
           {
-            if (j != i)
+            struct client newClient;
+            newClient.sockID = connfd;
+            newClient.addr = cli;
+            FD_SET(newClient.sockID, &currentSockets);
+            clients.push_back(newClient);
+            char buf[sizeof(VERSION)] = VERSION;
+            send(connfd, buf, strlen(buf), 0);
+            printf("Server protocol: %s\n", buf);
+            if (newClient.sockID > fdMax)
             {
-              send(clients.at(j).sockID, buffer, strlen(buffer), 0);
+              fdMax = newClient.sockID;
             }
           }
         }
-        else if (strstr(recvBuffer, "NICK ") != nullptr)
+        else
         {
-          sscanf(recvBuffer, "%s %s", command, clients.at(i).name);
-          printf("Name is allowed!\n");
+          memset(recvBuffer, 0, sizeof(recvBuffer));
+          recieve = recv(i, recvBuffer, sizeof(recvBuffer), 0);
+          if (recieve <= 0)
+          {
+            close(i);
+            for (size_t j = 0; j < clients.size(); j++)
+            {
+              if (i == clients[j].sockID)
+              {
+                clients.erase(clients.begin() + j);
+                FD_CLR(i, &currentSockets);
+                break;
+              }
+            }
+            continue;
+          }
+          else
+          {
+            if (strstr(recvBuffer, "MSG ") != nullptr)
+            {
+              memset(buffer, 0, sizeof(buffer));
+              memset(command, 0, sizeof(command));
+              memset(messageBuffer, 0, sizeof(messageBuffer));
+              sscanf(recvBuffer, "%s %[^\n]", command, messageBuffer);
+              for (size_t j = 0; j < clients.size(); j++)
+              {
+                if (i == clients[j].sockID)
+                {
+                  sprintf(buffer, "%s %s %s", command, clients[j].name, messageBuffer);
+                  break;
+                }
+              }
+              for (size_t j = 0; j < clients.size(); j++)
+              {
+                send(clients.at(j).sockID, buffer, strlen(buffer), 0);
+              }
+            }
+            else if (strstr(recvBuffer, "NICK ") != nullptr)
+            {
+              for (size_t j = 0; j < clients.size(); j++)
+              {
+                if (i == clients[j].sockID)
+                {
+                  sscanf(recvBuffer, "%s %s", command, clients.at(j).name);
+                  printf("Name is allowed!\n");
+                  break;
+                }
+              }
+            }
+          }
         }
-        FD_CLR(clients.at(i).sockID, &readySockets);
+        FD_CLR(i, &readySockets);
       }
     }
   }
