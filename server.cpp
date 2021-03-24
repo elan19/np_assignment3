@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
     break;
   }
 
-  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+  //setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
   if (p == NULL)
   {
     printf("NULL\n");
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
   }
 
   len = sizeof(cli);
-  char buffer[273];
+  char buffer[274];
   char recvBuffer[260];
   char messageBuffer[256];
   char command[5];
@@ -122,6 +122,8 @@ int main(int argc, char *argv[])
   int fdMax = sockfd;
   int nfds = 0;
   int recieve = 0;
+  bool nameExists = false;
+  int currentClient = -1;
 
   while (true)
   {
@@ -191,7 +193,7 @@ int main(int argc, char *argv[])
               {
                 if (i == clients[j].sockID)
                 {
-                  sprintf(buffer, "%s %s %s", command, clients[j].name, messageBuffer);
+                  sprintf(buffer, "%s %s %s\n", command, clients[j].name, messageBuffer);
                   break;
                 }
               }
@@ -202,12 +204,21 @@ int main(int argc, char *argv[])
             }
             else if (strstr(recvBuffer, "NICK ") != nullptr)
             {
+              nameExists = false;
+              currentClient = -1;
               for (size_t j = 0; j < clients.size(); j++)
               {
                 if (i == clients[j].sockID)
                 {
+                  currentClient = j;
+                  char nameLength[15];
                   sscanf(recvBuffer, "%s %s", command, clients.at(j).name);
-                  bool nameExists = false;
+                  sscanf(recvBuffer, "%s %s", command, nameLength);
+                  if (strlen(nameLength) > 12)
+                  {
+                    nameExists = true;
+                    send(i, "Name is to long, Max 12 characters is allowed!\n", strlen("Name is to long, Max 12 characters is allowed!\n"), 0);
+                  }
                   for (size_t g = 0; g < clients.size() && !nameExists; g++)
                   {
                     if (g != j && strcmp(clients[g].name, clients[j].name) == 0 && strlen(clients[g].name) == strlen(clients[j].name))

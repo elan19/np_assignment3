@@ -158,7 +158,6 @@ int main(int argc, char *argv[])
       {
         printf("Message to long!\n");
         FD_CLR(STDIN_FILENO, &readySockets);
-        memset(messageBuf, 0, sizeof(messageBuf));
         break;
       }
       else
@@ -185,7 +184,7 @@ int main(int argc, char *argv[])
         memset(buffer, 0, sizeof(buffer));
         memset(command, 0, sizeof(command));
         memset(nameBuffer, 0, sizeof(nameBuffer));
-        sscanf(recvBuf, "%s%s%[^\n]", command, nameBuffer, buffer);
+        sscanf(recvBuf, "%s %s %[^\n]", command, nameBuffer, buffer);
         if (strcmp(nameBuffer, DestName) != 0)
         {
           printf("%s: %s\n", nameBuffer, buffer);
@@ -194,7 +193,7 @@ int main(int argc, char *argv[])
       else if (strstr(recvBuf, VERSION) != nullptr)
       {
         memset(sendBuf, 0, sizeof(sendBuf));
-        printf("Server protocol: %s\n", recvBuf);
+        printf("Server protocol: %s", recvBuf);
         sprintf(sendBuf, "NICK %s", DestName);
         send(sockfd, sendBuf, strlen(sendBuf), 0);
       }
@@ -202,9 +201,14 @@ int main(int argc, char *argv[])
       {
         printf("Name accepted!\n");
       }
+      else if (strstr(recvBuf, "ERROR") != nullptr)
+      {
+        printf("%s", recvBuf);
+        exit(0);
+      }
       else if (strstr(recvBuf, "ERR") != nullptr)
       {
-        printf("Name is not accepted!\n");
+        printf("%s", recvBuf);
         exit(0);
       }
       else if(strstr(recvBuf, "Server is closing!\n") != nullptr)
