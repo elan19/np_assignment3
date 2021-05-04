@@ -12,6 +12,9 @@
 #include <curses.h>
 #include <sys/select.h>
 #include <vector>
+#include <regex.h>
+#include <string>
+
 /* You will to add includes here */
 
 struct client
@@ -55,6 +58,7 @@ int main(int argc, char *argv[])
     printf("Wrong format.\n");
     exit(0);
   }
+
   int port = atoi(Destport);
 
   int sockfd, connfd, len;
@@ -65,10 +69,6 @@ int main(int argc, char *argv[])
   sa.ai_family = AF_UNSPEC;
   sa.ai_socktype = SOCK_STREAM;
   sa.ai_flags = AI_PASSIVE;
-
-  struct timeval tv;
-  tv.tv_sec = 5;
-  tv.tv_usec = 0;
 
   if (int rv = getaddrinfo(Desthost, Destport, &sa, &si) != 0)
   {
@@ -93,7 +93,6 @@ int main(int argc, char *argv[])
     break;
   }
 
-  //setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
   if (p == NULL)
   {
     printf("NULL\n");
@@ -109,11 +108,26 @@ int main(int argc, char *argv[])
     exit(0);
   }
 
+  char expression[] = "^[A-Za-z0-9_]+$";
+  regex_t regularexpression;
+  int reti;
+
+  reti = regcomp(&regularexpression, expression, REG_EXTENDED);
+  if (reti)
+  {
+    fprintf(stderr, "Could not compile regex.\n");
+    exit(1);
+  }
+
+  int matches = 0;
+  regmatch_t items;
+
   len = sizeof(cli);
   char buffer[274];
   char recvBuffer[260];
   char messageBuffer[256];
   char command[5];
+  char nameLength[15];
   fd_set currentSockets;
   fd_set readySockets;
   FD_ZERO(&currentSockets);
@@ -123,7 +137,7 @@ int main(int argc, char *argv[])
   int nfds = 0;
   int recieve = 0;
   bool nameExists = false;
-  int currentClient = -1;
+  //int currentClient = -1;
 
   while (true)
   {
@@ -165,6 +179,7 @@ int main(int argc, char *argv[])
         }
         else
         {
+          std::string temp = {};
           memset(recvBuffer, 0, sizeof(recvBuffer));
           recieve = recv(i, recvBuffer, sizeof(recvBuffer), 0);
           if (recieve <= 0)
@@ -172,7 +187,7 @@ int main(int argc, char *argv[])
             close(i);
             for (size_t j = 0; j < clients.size(); j++)
             {
-              if (i == clients[j].sockID)
+              if (i == clients.at(j).sockID)
               {
                 clients.erase(clients.begin() + j);
                 FD_CLR(i, &currentSockets);
@@ -183,65 +198,87 @@ int main(int argc, char *argv[])
           }
           else
           {
-            if (strstr(recvBuffer, "MSG ") != nullptr)
+            temp = recvBuffer;
+            while (strlen(recvBuffer) > 0)
             {
-              memset(buffer, 0, sizeof(buffer));
-              memset(command, 0, sizeof(command));
-              memset(messageBuffer, 0, sizeof(messageBuffer));
-              sscanf(recvBuffer, "%s %[^\n]", command, messageBuffer);
-              for (size_t j = 0; j < clients.size(); j++)
+              if (strstr(recvBuffer, "MSG ") != nullptr)
               {
-                if (i == clients[j].sockID)
+                memset(buffer, 0, sizeof(buffer));
+                memset(command, 0, sizeof(command));
+                memset(messageBuffer, 0, sizeof(messageBuffer));
+                sscanf(recvBuffer, "%s %[^\n]", command, messageBuffer);
+                for (size_t j = 0; j < clients.size(); j++)
                 {
-                  sprintf(buffer, "%s %s %s\n", command, clients[j].name, messageBuffer);
-                  break;
-                }
-              }
-              for (size_t j = 0; j < clients.size(); j++)
-              {
-                send(clients.at(j).sockID, buffer, strlen(buffer), 0);
-              }
-            }
-            else if (strstr(recvBuffer, "NICK ") != nullptr)
-            {
-              nameExists = false;
-              currentClient = -1;
-              for (size_t j = 0; j < clients.size(); j++)
-              {
-                if (i == clients[j].sockID)
-                {
-                  currentClient = j;
-                  char nameLength[15];
-                  sscanf(recvBuffer, "%s %s", command, clients.at(j).name);
-                  sscanf(recvBuffer, "%s %s", command, nameLength);
-                  if (strlen(nameLength) > 12)
+                  if (i == clients.at(j).sockID)
                   {
-                    nameExists = true;
-                    send(i, "Name is to long, Max 12 characters is allowed!\n", strlen("Name is to long, Max 12 characters is allowed!\n"), 0);
-                  }
-                  for (size_t g = 0; g < clients.size() && !nameExists; g++)
-                  {
-                    if (g != j && strcmp(clients[g].name, clients[j].name) == 0 && strlen(clients[g].name) == strlen(clients[j].name))
-                    {
-                      nameExists = true;
-                      send(i, "ERR The name is already in use!\n", strlen("ERR The name is already in use!\n"), 0);
-                    }
-                  }
-                  if (nameExists == false)
-                  {
-                    printf("Name is allowed!\n");
-                    send(i, "OK\n", strlen("OK\n"), 0);
+                    sprintf(buffer, "%s %s %s\n", command, clients.at(j).name, messageBuffer);
                     break;
                   }
                 }
+                for (size_t j = 0; j < clients.size(); j++)
+                {
+                  send(clients.at(j).sockID, buffer, strlen(buffer), 0);
+                }
+                temp.erase(0, strlen(command) + strlen(messageBuffer) + 2);
+                strcpy(recvBuffer, temp.c_str());
               }
-            }
-            else
-            {
-              send(i, "ERROR Wrong format on the message\n", strlen("ERORR Wrong format on the message\n"), 0);
+              else if (strstr(recvBuffer, "NICK ") != nullptr)
+              {
+                nameExists = false;
+                //currentClient = -1;
+                for (size_t j = 0; j < clients.size(); j++)
+                {
+                  if (i == clients.at(j).sockID)
+                  {
+                    memset(nameLength, 0, sizeof(nameLength));
+                    //currentClient = j;
+                    sscanf(recvBuffer, "%s %[^\n]", command, nameLength);
+                    if (strlen(nameLength) > 12)
+                    {
+                      nameExists = true;
+                      send(i, "ERROR, Name is to long, Max 12 characters is allowed!\n", strlen("ERROR, Name is to long, Max 12 characters is allowed!\n"), 0);
+                    }
+                    else
+                    {
+                      sscanf(recvBuffer, "%s %s", command, clients.at(j).name);
+                    }
+                    for (size_t g = 0; g < clients.size() && !nameExists; g++)
+                    {
+                      if (g != j && strcmp(clients.at(g).name, clients.at(j).name) == 0 && strlen(clients.at(g).name) == strlen(clients.at(j).name))
+                      {
+                        nameExists = true;
+                        send(i, "ERROR The name is already in use!\n", strlen("ERROR The name is already in use!\n"), 0);
+                      }
+                    }
+                    if (nameExists == false)
+                    {
+
+                      reti = regexec(&regularexpression, clients.at(j).name, matches, &items, 0);
+                      if (reti)
+                      {
+                        printf("Nick is not accepted.\n");
+                        send(i, "ERROR, Characters not OK!\n", strlen("ERROR, Characters not OK!\n"), 0);
+                      }
+                      else
+                      {
+                        printf("Name is allowed!\n");
+                        send(i, "OK\n", strlen("OK\n"), 0);
+                        break;
+                      }
+                    }
+                  }
+                }
+                temp.erase(0, strlen(command) + strlen(nameLength) + 2);
+                strcpy(recvBuffer, temp.c_str());
+              }
+              else
+              {
+                send(i, "ERROR Wrong format on the message\n", strlen("ERORR Wrong format on the message\n"), 0);
+              }
             }
           }
         }
+
         FD_CLR(i, &readySockets);
       }
     }
@@ -250,7 +287,7 @@ int main(int argc, char *argv[])
 #ifdef DEBUG
   printf("Host %s, and port %d.\n", Desthost, port);
 #endif
-
+  regfree(&regularexpression);
   close(sockfd);
   return 0;
 }
