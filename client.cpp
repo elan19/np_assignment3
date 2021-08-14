@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
   signal(SIGINT, INThandler);
 
   char recvBuf[273];
-  char sendBuf[260];
+  char sendBuf[261];
   int bytes;
   fd_set currentSockets;
   fd_set readySockets;
@@ -162,8 +162,8 @@ int main(int argc, char *argv[])
       }
       else
       {
-        sprintf(sendBuf, "MSG %s", messageBuf);
-        send(sockfd, sendBuf, sizeof(sendBuf), 0);
+        sprintf(sendBuf, "MSG %s\n", messageBuf);
+        send(sockfd, sendBuf, strlen(sendBuf), 0);
         FD_CLR(STDIN_FILENO, &readySockets);
       }
     }
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
       {
         memset(sendBuf, 0, sizeof(sendBuf));
         printf("Server protocol: %s", recvBuf);
-        sprintf(sendBuf, "NICK %s", DestName);
+        sprintf(sendBuf, "NICK %s\n", DestName);
         send(sockfd, sendBuf, strlen(sendBuf), 0);
       }
       else if (strstr(recvBuf, "OK") != nullptr)

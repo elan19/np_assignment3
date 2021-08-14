@@ -16,8 +16,8 @@ main.o: main.cpp
 	$(CXX) -Wall -I. -c main.cpp
 
 
-test: main.o main_curses.o
-	$(CXX) -L./ -Wall -lncurses  -o test main.o 
+test: main.o
+	$(CXX) -I./ -Wall -lncurses  -o test main.o 
 
 
 client: client.o
